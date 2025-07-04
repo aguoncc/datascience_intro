@@ -1,0 +1,617 @@
+---
+title: "Final Exam"
+author: "Michael Cajigal"
+date: "2025-05-05"
+output: html_document
+---
+
+```{r}
+#Loading libraries.
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(psych)
+library(lavaan)
+library(semPlot)
+library(MASS)
+library(HSAUR2)
+library(vegan)
+library(caret)
+library(CCA) 
+library(scales)
+library(data.table)
+library(dendextend)
+library(factoextra)
+
+#Loading the data.
+worland5 <- read.csv('/Users/michaelcajigal/Desktop/MA564/Final Exam/worland5(in).csv')
+head(worland5)
+summary(worland5)
+#Because the scaling for the variables are the same, we do not need to standarized.
+#Checking for any missing data because PCA interpretation changes.
+colSums(is.na(worland5))
+```
+
+# **Part 1. Data Reduction**
+
+## 1: Principal Component Analysis (PCA)
+
+-   Perform PCA on all 9 variables.
+
+```{r}
+#Compute the covariance matrix.
+cov_worland5 <- cov(worland5)
+print(cov_worland5)
+#Compute total variance.
+trace_cov <- sum(diag(cov_worland5))
+#Print the result.
+print(trace_cov)
+
+#Perform PCA (unstandardized).
+pca_worland5 <- prcomp(worland5)
+
+# Compute eigenvalues from PCA
+eigenvalues <- (pca_worland5$sdev)^2  
+
+# Print the eigenvalues
+print(eigenvalues)
+
+# Perform PCA with varimax rotation.
+# pca_rotated <- principal(svi_clean, nfactors = 3, rotate = "varimax", scores = TRUE)
+# print(pca_rotated)
+```
+
+-   Determine how many components explain at least 75% of the variance.
+
+```{r}
+#Variance Explained:
+#Print PCA summary (eigenvalues and explained variance)
+summary(pca_worland5)
+```
+
+-   Based of the cumulative proportion after conducting the PCA, 3 components explain at least 75% of the variance.
+
+-   Create a scree plot, how many components would you keep.
+
+```{r}
+#Scree Plot (Elbow method):
+#Scree plot
+#Create a dataframe for plotting
+scree_worland5 <- data.frame(
+  PC = paste0("PC", 1:length(eigenvalues)),  
+  Eigenvalue = eigenvalues)
+
+#Plot the Scree Plot using ggplot2
+ggplot(scree_worland5, aes(x = PC, y = Eigenvalue)) +
+  geom_line(aes(group = 1), color = "red", linetype = "dashed") +  
+  geom_point(color = "red", size = 3) +  
+  labs(title = "Scree Plot of PCA", x = "Principal Components", y = "Eigenvalues") +
+  theme_minimal()
+```
+
+-   Based off the scree plot, an obvious "elbow" is seen at principal component 2. Therefore, just based off the scree plot alone, I would keep 2 components. However, I do think it is important to consider multiple criteria, including the scree plot, explained variance, and even kaiser method when deciding how many components to retain.
+
+-   Perform PCA on all 9 variables using varimax rotation and interpret the loadings of the first three components.
+
+```{r}
+#Perform PCA with varimax rotation.
+pca_rotated <- principal(worland5, nfactors = 3, rotate = "varimax", scores = TRUE)
+print(pca_rotated)
+```
+
+-   The resulting components align closely with the three latent constructs described in the original framework. Component 1 appears to reflect academic achievement, with strong loadings on reading (0.86), arithmetic (0.82), and spelling (0.86), all of which are standardized measures of school performance. Although verbal intelligence also loads moderately on this component (0.57), it is not dominant and seems to be shared between Components 1 and 3. This overlap suggests that verbal intelligence contributes to both academic performance and another underlying factor.
+
+    Component 2 represents the construct of adjustment, as it shows high loadings on motivation (0.81), harm avoidance (0.87), and stability (0.81). These items reflect self-regulatory behaviors, social-emotional functioning, and students' ability to maintain consistent effort—aligning well with how adjustment is described in the literature.
+
+    Component 3 captures the risk domain, with strong negative loadings on parental psychopathology (–0.84) and a high positive loading on socioeconomic status (0.75). Interestingly, verbal intelligence also loads moderately on this component (0.51), further confirming its cross-cutting relevance to multiple domains. If verbal intelligence were grouped primarily with Component 3, the three-component solution would map almost exactly onto the constructs of Achievement, Adjustment, and Risk.
+
+    In summary, these components reflect distinct but interconnected domains of children's functioning. Component 1 emphasizes standardized academic skills, Component 2 highlights emotional and behavioral adjustment, and Component 3 reflects contextual and familial risk factors. The overlapping loadings on verbal intelligence point to its relevance across both achievement and risk, which is consistent with the multifaceted nature of cognitive development in children at varying levels of psychological risk.
+
+## 2: Exploratory Factor Analysis (EFA)
+
+-   Run EFA using maximum likelihood estimation with varimax rotation.
+
+```{r}
+#Run factor analysis with MLE.
+fa_mle <- fa(worland5, nfactors = 2, rotate = "varimax",fm = "ml")
+#Print simplified output.
+print(fa_mle, digits = 2)
+scores_mle <- fa_mle$scores
+head(scores_mle)
+#get scores
+fa_mle <- fa(worland5, nfactors = 2, fm = "ml", rotate = "varimax", scores = "regression")
+scores_mle <- fa_mle$scores
+head(scores_mle)
+```
+
+-   Use scree plot to determine the number of factors.
+
+```{r}
+#Scree Plot (Elbow method):
+#Create a dataframe for plotting
+scree_worland5 <- data.frame(
+  PC = paste0("PC", 1:length(eigenvalues)),  
+  Eigenvalue = eigenvalues)
+
+#Plot the Scree Plot using ggplot2
+ggplot(scree_worland5, aes(x = PC, y = Eigenvalue)) +
+  geom_line(aes(group = 1), color = "red", linetype = "dashed") +  
+  geom_point(color = "red", size = 3) +  
+  labs(title = "Scree Plot of PCA", x = "Principal Components", y = "Eigenvalues") +
+  theme_minimal()
+```
+
+-   Based off the elbow criterion (scree plot) strictly, 2 components will be retained.
+
+-   Examine which variables load on which factors.
+
+    motiv, harm, and stabi have particularly high loadings onto Factor 2 and read, arith, and spell have particularly high loadings onto Factor 1. ppsych, ses, and verbal don't particularly have high loadings into either, but they do have weak loadings more onto Factor1 than they do onto Factor 2.
+
+-   Compare your factor structure with the hypothesized Adjustment, Risk, and Achievement constructs.
+
+<!-- -->
+
+-   Based off the EFA, using MLE with Varimax rotation, the resulting components do not exactly align with the hypothesized structure. As mentioned there are particularly high loadings onto Factors 1 and 2, however there are also weak loadings onto both revealing that there may be another essential component to consider.
+
+## 3: Confirmatory Factor Analysis (CFA)
+
+a)  Specify an uncorrelated three-factor model with the following structure:
+
+\* Adjustment: motiv, harm, stabi
+
+\* Risk: ppsych, ses, verbal
+
+\* Achievement: read, arith, spell
+
+-   Estimate the model and assess model fit using CFI, TLI, and RMSEA.
+
+-   Report the factor loadings and their significance.
+
+-   Create path diagram
+
+```{r}
+####### Three Factors CFA  ###############
+
+# Since we are proprosing th model(s), we can check for both correlated factors and uncorrelated factors.
+#uncorrelated three-factor solution, var std method
+#The a* syntax tells lavaan to constrain both loadings to be equal
+
+worland5_uncorr <- 'f1 =~ X.motiv + harm + stabi
+        f2 =~ a*ppsych + a*ses + a*verbal
+        f3 =~ a*read + a*arith + a*spell
+        f1 ~~ 0*f2
+        f2 ~~ 0*f3
+        f3 ~~ 0*f1' 
+
+threefac9items_a <- cfa(worland5_uncorr, data=worland5, std.lv=TRUE) 
+
+summary(threefac9items_a, fit.measures=TRUE,standardized=TRUE)
+
+semPaths(threefac9items_a, what="std", edge.label.cex = 1.2)
+
+```
+
+-   The results of the uncorrelated CFA indicated a poor model fit, with a Comparative Fit Index (CFI) of 0.598 and a Tucker-Lewis Index (TLI) of 0.547, both well below the commonly accepted threshold of 0.90. Additionally, the Root Mean Square Error of Approximation (RMSEA) was 0.254, with a 90% confidence interval ranging from 0.241 to 0.267, and a p-value of 0 for the test of close fit (RMSEA ≤ 0.05), further confirming a poor fit.
+
+    Despite the poor overall model fit, the factor loadings themselves were strong and statistically significant across all items. For the Adjustment factor, standardized loadings were 0.885 for motiv, 0.870 for harm, and 0.667 for stabi. For the Risk factor, loadings were 0.515 for ppsych, 0.669 for ses, and 0.671 for verbal. Finally, the Achievement factor showed particularly high loadings: 0.895 for read, 0.771 for arith, and 0.890 for spell. All loadings were significant at p = 0.000, indicating that each observed variable was a meaningful indicator of its respective latent construct.
+
+    Overall, while the factor structure appears theoretically sound and the loadings support the measurement model, the poor fit indices suggest the model may require revision, such as allowing factor correlations or exploring potential cross-loadings.
+
+(b) Specify a correlated three-factor model, repeat all steps from a).
+
+```{r}
+#Correlated three factor solution, marker method
+worland5_corr <- 'f1 =~ X.motiv + harm + stabi
+        f2 =~ ppsych + ses + verbal
+        f3 =~ read + arith + spell'
+
+threefac9items_b <- cfa(worland5_corr, data=worland5, std.lv=TRUE) 
+
+summary(threefac9items_b,fit.measures=TRUE, standardized=TRUE)
+
+semPaths(threefac9items_b, what="std", edge.label.cex = 1.2)
+```
+
+-   The model showed substantially improved fit compared to the uncorrelated version. The Comparative Fit Index (CFI) was 0.951 and the Tucker-Lewis Index (TLI) was 0.927, both exceeding the common threshold of 0.90, indicating good fit. The Standardized Root Mean Square Residual (SRMR) was also excellent at 0.041 (below the 0.08 cutoff). However, the Root Mean Square Error of Approximation (RMSEA) remained high at 0.102 (90% CI: 0.087–0.118), suggesting some misfit, though this index can be sensitive in models with low degrees of freedom. Overall, model fit was notably improved and mostly acceptable.
+
+    All factor loadings were statistically significant at p \< .001. For the Adjustment factor, standardized loadings were strong: 0.933 for motiv, 0.825 for harm, and 0.648 for stabi. For the Risk factor, standardized loadings were 0.564 for ppsych, –0.591 for ses, and –0.733 for verbal. (Note: negative loadings suggest an inverse relationship with the latent construct and may reflect the coding or interpretation of those items.) For the Achievement factor, loadings were consistently high: 0.941 for read, 0.788 for arith, and 0.919 for spell. These results confirm that each indicator loaded meaningfully onto its intended latent variable.
+
+    In summary, the correlated factor solution improved model fit significantly and retained strong, significant factor loadings, providing a more realistic representation of the data’s underlying structure.
+
+(c) Compare models from a) and b)
+
+-   Comparing the uncorrelated and correlated three factor models reveals that allowing the latent factors to correlate significantly **improves** model fit and provides a more realistic representation of the data structure. In the uncorrelated model, fit indices were poor, with a CFI of 0.598, TLI of 0.547, and an RMSEA of 0.254, all indicating substantial misfit. In contrast, the correlated model achieved much better fit: CFI increased to 0.951, TLI to 0.927, and SRMR dropped to 0.041, suggesting that the model captures the underlying relationships among constructs more accurately. Although the RMSEA remained above the ideal threshold at 0.102, this value was notably lower than in the uncorrelated solution and is sometimes inflated in models with low degrees of freedom. Importantly, both models showed strong and statistically significant factor loadings, but the correlated model preserved these strengths while improving model coherence. The significant correlations observed among the factors, such as the positive relationship between Adjustment and Achievement (r = 0.64) and negative correlations between Risk and the other two factors, further support the appropriateness of a correlated factor structure. Overall, the correlated model offers a better fitting and theoretically sound representation of the latent constructs.
+
+## 4: Multidimensional Scaling (MDS)
+
+-   Compute a distance matrix (e.g., Euclidean) using all 9 variables.
+
+```{r}
+#No need to scale since variables have similar measure.
+#Compute Euclidean distance matrix.
+dist_matrix <- dist(worland5, method = "euclidean")
+```
+
+-   Perform classical (metric) MDS and plot students in 2D space.
+
+```{r}
+#Classical MDS (metric).
+mds_classical <- cmdscale(dist_matrix, k = 2) #Preserves actual distances.
+
+#Plot the result.
+plot(mds_classical, type = "n", main = "Classical MDS (Metric)", xlab = "Dim 1", ylab = "Dim 2")
+text(mds_classical, labels = rownames(worland5), cex = 0.7)
+```
+
+-   Perform non-metric MDS and compare the result.
+
+```{r}
+#Non-metric MDS.
+mds_nonmetric <- metaMDS(worland5, k = 2, autotransform = TRUE) #Preserves rank order of distances.
+
+#Plot non-metric MDS.
+plot(mds_nonmetric$points, type = "n", main = "Non-Metric MDS", xlab = "Dim 1", ylab = "Dim 2")
+text(mds_nonmetric$points, labels = rownames(worland5), cex = 0.7)
+
+```
+
+-   Interpret the 2D space: Are there any visible groupings or patterns?
+
+-   The MDS plot displays a relatively compact distribution of students, centered around the origin. Most of the points are densely clustered, forming an elliptical shape, with a few students appearing on the outer edges as potential outliers. This indicates that the first two dimensions capture a moderate amount of variation in the dataset, and the distances between points reflect actual Euclidean distances. Although there are no distinct groupings or clusters, the overall structure suggests that the students are moderately similar across the measured variables, with some variation at the extremes.
+
+    In contrast, the Non-Metric MDS plot reveals a stretched and curved configuration, resembling a horseshoe or coffee bean shape. This method, which preserves the rank order of dissimilarities rather than exact distances, has distorted the configuration in order to best represent the data in two dimensions. Additionally, the axes in this plot show unusually large numerical ranges, which may indicate that the model may not have converged well. This can happen if the stress value is high which in real-time drring the process, we can see that they are greater than 0.1.
+
+    Overall, while the Classical MDS offers a more stable and interpretable representation of the data, the Non-Metric MDS may be highlighting an underlying structure, even though it appears distorted. However, due to the likely high stress value, the non-metric solution should be interpreted with caution.
+
+<!-- -->
+
+-   Extra credit:
+
+    -    Create a categorical SES variable by dividing students into three groups:
+
+        Low SES: bottom quartile
+
+        Middle SES: middle 50%
+
+        High SES: top quartile.
+
+    ```{r}
+    # Get SES vector
+    ses <- worland5$ses
+
+    # Compute quartiles
+    q1 <- quantile(ses, 0.25)
+    q3 <- quantile(ses, 0.75)
+
+    # Create SES group variable
+    ses_group <- cut(ses,
+                     breaks = c(-Inf, q1, q3, Inf),
+                     labels = c("Low SES", "Middle SES", "High SES"),
+                     include.lowest = TRUE)
+
+    # Attach to your data frame if desired
+    worland5$SES_group <- ses_group
+
+    # Define color palette
+    colors <- c("Low SES" = "red", "Middle SES" = "gray", "High SES" = "blue")
+
+    # Plot with color
+    plot(mds_classical, type = "n", main = "Classical MDS Colored by SES", xlab = "Dim 1", ylab = "Dim 2")
+    points(mds_classical, col = colors[ses_group], pch = 19)
+    legend("topright", legend = names(colors), col = colors, pch = 19)
+    ```
+
+    -   Color-code the points on the MDS plot by SES group, any interesting results?
+
+    -   The Classical MDS plot color-coded by SES group reveals some interesting patterns in the distribution of students across the 2D space. Although there are no sharply defined clusters, there is a noticeable spatial trend along Dimension 1. Students in the low SES group, shown in red, are more concentrated on the left side of the plot, while those in the high SES group, shown in blue, tend to appear more on the right side. The middle SES group, represented in gray, is more evenly distributed across the central area, overlapping with both the low and high SES groups.
+
+        This pattern suggests that Dimension 1 may reflect variation associated with socioeconomic status, with higher SES students differing from lower SES students in their overall profiles on the variables included in the analysis. While the middle group bridges both ends, the separation between low and high SES students indicates that SES may play a meaningful role in structuring the data. However, the overlap between groups also shows that SES is likely not the only factor influencing the positioning of students in the MDS space. Overall, the MDS results point to a general SES gradient, which could be further explored using additional statistical techniques to clarify the influence of SES on the observed patterns.
+
+```{r}
+# Extract coordinates
+nonmetric_coords <- mds_nonmetric$points
+
+# Plot and color-code
+plot(nonmetric_coords, type = "n", main = "Non-Metric MDS Colored by SES", xlab = "Dim 1", ylab = "Dim 2")
+points(nonmetric_coords, col = colors[ses_group], pch = 19)
+legend("topright", legend = names(colors), col = colors, pch = 19)
+```
+
+-   In this plot, there is a visible progression of SES groups along the curve. Low SES students, shown in red, appear more frequently toward the left and upper arc of the curve, while high SES students, in blue, tend to cluster more on the right and lower portions. The middle SES group, represented in gray, is spread throughout the central region and overlaps with both the low and high SES groups.
+
+    The overall pattern suggests that SES may correspond with the underlying structure revealed in the MDS solution. Students from different socioeconomic backgrounds are not randomly scattered but instead seem to follow a directional flow, possibly reflecting differences in profiles across the measured variables. Although the separation is not perfect and there is some overlap, the spatial distribution of the points indicates that SES plays a role in shaping the variation in the dataset. The arch effect, while a known artifact of dimensional compression, further reinforces the likelihood that the data contains a strong gradient, with SES being one of the influencing factors.
+
+# **Part 2. Classification**
+
+## 5: Hierarchical Clustering
+
+-   Apply agglomerative hierarchical clustering using Euclidean distance and Ward’s method.
+
+```{r}
+worland5 <- read.csv('/Users/michaelcajigal/Desktop/MA564/Final Exam/worland5(in).csv')
+dist_matrix <- dist(worland5, method = "euclidean")
+#1.Perform hierarchical clustering using ward linkage, 
+#when we use method = "ward.D2" in hclust(), 
+#R automatically squares the Euclidean distances internally.
+hc_ward <- hclust(dist_matrix, method = "ward.D2")
+```
+
+-   Create a dendrogram and cut it to form 3 clusters.
+
+```{r}
+clusters_ward <- cutree(hc_ward, k = 3)
+dend <- as.dendrogram(hc_ward)
+dend_colored <- color_branches(dend, 3)%>%
+  set("branches_lwd", 2)
+
+plot(dend_colored,
+     main = "Dendrogram - Ward Linkage (3 Clusters)",
+     ylab = "Height (Distance)")
+```
+
+-   Compare results with those from K-means clustering.
+
+## 6: K-Means Clustering
+
+-   Standardize the dataset and perform K-means clustering for 2 to 6 clusters.
+
+```{r}
+#Scaling the data.
+worland5_scaled <- scale(worland5)
+```
+
+-   Use the elbow and silhouette method to find the optimal number of clusters.
+
+```{r}
+#1.Scree plot (elbow method).
+fviz_nbclust(worland5_scaled, kmeans, method = "wss", k.max=12)
+#2. Silhouette method.
+fviz_nbclust(worland5_scaled, kmeans, method = "silhouette") +
+  labs(title = "Silhouette Method for Determining Optimal k")
+
+```
+
+-   Since both the elbow and silhouette method show that an optimal number of clusters is 2, we will attempt 2 clusters:
+
+```{r}
+#Run K-means clustering with k = 2.
+set.seed(123)  # for reproducibility
+kmeans_result <- kmeans(worland5_scaled, centers = 2, nstart = 100)
+
+#Plot results of final k-means model.
+fviz_cluster(kmeans_result, data = worland5_scaled)
+```
+
+-   Describe each cluster’s characteristics using mean values of the variables.
+
+```{r}
+# Add cluster labels to original (unscaled) data
+worland5$cluster <- as.factor(kmeans_result$cluster)
+
+# Calculate means of each variable by cluster
+aggregate(. ~ cluster, data = worland5, FUN = mean)
+```
+
+-   Cluster 1 could represent a group of students who show lower motivation, poorer peer interactions, and less emotional stability. They perform lower on verbal intelligence and academic achievement across reading, arithmetic, and spelling. These students may also come from more disadvantaged backgrounds, with lower socioeconomic status and higher levels of parental psychopathology, indicating greater exposure to psychological risk at home.
+
+    Cluster 2 reflects a lower-risk profile. Students in this group are more motivated, socially harmonious, and emotionally stable. They achieve higher scores in verbal intelligence and academic performance and come from families with higher socioeconomic status and fewer parental mental health issues. Overall, this group benefits from stronger personal and contextual support, contributing to more favorable outcomes.
+
+## 7: Discriminant Analysis (LDA/QDA)
+
+```{r}
+worland5 <- read.csv('/Users/michaelcajigal/Desktop/MA564/Final Exam/worland5(in).csv')
+```
+
+-   Create a binary variable for achievement: top 25% as high, others as low.
+
+```{r}
+#Create a composite academic score taking the average of the three subvars.
+worland5$achievement_avg <- rowMeans(worland5[, c("read", "arith", "spell")])
+
+#Calculate 75th percentile
+cutoff <- quantile(worland5$achievement_avg, 0.75)
+
+#Create binary variable
+worland5$achievement_binary <- ifelse(worland5$achievement_avg >= cutoff, "high", "low")
+
+#Convert to factor
+worland5$achievement_binary <- factor(worland5$achievement_binary, levels = c("low", "high"))
+
+```
+
+-   Use LDA and QDA to classify students based on remaining variables.
+
+```{r}
+# Define predictors: drop achievement vars and binary label
+predictors <- worland5[, c("X.motiv", "harm", "stabi", "ppsych", "ses", "verbal")]
+
+# Fit LDA model
+lda_model <- lda(achievement_binary ~ ., data = cbind(predictors, achievement_binary = worland5$achievement_binary))
+
+# View results
+lda_model
+
+# Predict on the same data
+lda_pred <- predict(lda_model)
+
+# Confusion matrix
+table(Predicted = lda_pred$class, Actual = worland5$achievement_binary)
+```
+
+```{r}
+# Fit QDA model
+qda_model <- qda(achievement_binary ~ ., data = cbind(predictors, achievement_binary = worland5$achievement_binary))
+
+# View results
+qda_model
+
+# Predict
+qda_pred <- predict(qda_model)
+
+# Confusion matrix
+table(Predicted = qda_pred$class, Actual = worland5$achievement_binary)
+```
+
+-   Report classification accuracy and confusion matrices.
+
+```{r}
+# Confusion matrix
+lda_cm <- table(Predicted = lda_pred$class, Actual = worland5$achievement_binary)
+lda_cm
+
+# Accuracy
+lda_accuracy <- mean(lda_pred$class == worland5$achievement_binary)
+lda_accuracy
+```
+
+-   The LDA model achieved a classification accuracy of 82.2%. The confusion matrix showed that 60 students were correctly classified as "high" and 351 as "low", while 65 were misclassified as "low" and 24 students were misclassified as "high". This suggests the model performs reasonably well in distinguishing between high- and low-achieving students based on motivational, behavioral, and contextual variables.
+
+```{r}
+# Confusion matrix
+qda_cm <- table(Predicted = qda_pred$class, Actual = worland5$achievement_binary)
+qda_cm
+
+# Accuracy
+qda_accuracy <- mean(qda_pred$class == worland5$achievement_binary)
+qda_accuracy
+```
+
+-   The Quadratic Discriminant Analysis (QDA) model produced a classification accuracy of 83.6%, slightly better than LDA. The confusion matrix showed that 68 students were correctly identified as "high" and 350 students as "low", though misclassifications occurred in a few cases. 57 students were misidentified as "low" and 25 students as "high". Compared to LDA, the QDA model may have captured more complex boundaries between groups but may also be more sensitive to variance differences across classes.
+
+-   Apply cross-validation to evaluate performance.
+
+```{r}
+# Cross-validated LDA
+lda_cv <- lda(achievement_binary ~ X.motiv + harm + stabi + ppsych + ses + verbal,
+              data = worland5, CV = TRUE)
+
+# Confusion matrix
+lda_cv_cm <- table(Predicted = lda_cv$class, Actual = worland5$achievement_binary)
+print(lda_cv_cm)
+
+# Accuracy
+lda_cv_accuracy <- mean(lda_cv$class == worland5$achievement_binary)
+print(lda_cv_accuracy)
+```
+
+-   Using leave-one-out cross-validation, the LDA model achieved a classification accuracy of 81.8%. The confusion matrix showed that 409 students were correctly classified and 91 students were misclassified across the high and low achievement groups, indicating the model's generalizability is stable.
+
+```{r}
+# Set up 10-fold cross-validation
+train_control <- trainControl(method = "cv", number = 10)
+
+# Train QDA with cross-validation
+qda_cv_model <- train(achievement_binary ~ X.motiv + harm + stabi + ppsych + ses + verbal,
+                      data = worland5,
+                      method = "qda",
+                      trControl = train_control)
+
+# Print accuracy
+print(qda_cv_model)
+
+```
+
+-   The QDA model was evaluated using 10-fold cross-validation. The model achieved a classification accuracy of 80.6%, indicating that it correctly classified students into high and low achievement groups with moderate success. Compared to the LDA model, QDA allows for different covariance structures between groups, which may better capture non-linear boundaries in the data. However we have to remember that QDA is more sensitive to small sample sizes and unequal group variances. This performance results suggest that while QDA can model more complex patterns, it may not offer a substantial improvement in accuracy over LDA in this case.
+
+# **Part 3. Relationships between two sets of variables**
+
+## 8: Canonical Correlation Analysis (CCA)
+
+```{r}
+worland5 <- read.csv('/Users/michaelcajigal/Desktop/MA564/Final Exam/worland5(in).csv')
+```
+
+-   Define Set 1 (Predictors): motiv, harm, stabi (Adjustment variables)
+
+```{r}
+predictors <- worland5[, c("X.motiv", "harm", "stabi")]
+```
+
+-   Define Set 2 (Outcomes): read, arith, spell (Achievement variables)
+
+```{r}
+outcomes <- worland5[, c("read", "arith", "spell")]
+```
+
+-   Perform CCA and report the canonical loadings.
+
+```{r}
+# Perform canonical correlation analysis
+cc1<-cc(predictors, outcomes)
+#display canonical correlations
+cc1$cor
+
+cc1_sq <- (cc1$cor)^2
+cc1_sq
+
+#interpretation is the same as R^2, Squaring describes the percentage of Ui explained by Vi.
+# raw canonical coefficients
+cc1$xcoef
+cc1$ycoef
+# compute canonical loadings
+cc2 <- comput(predictors, outcomes, cc1)
+# display canonical loadings
+cc2[3:6]
+```
+
+-   Interpret the canonical variates and identify which variables contribute most to the relationships.
+
+-   The first canonical function revealed the strongest relationship between the adjustment and achievement variable sets. Among the adjustment variables, motivation contributed most strongly with a loading of −0.997, followed by harmony at −0.740 and stability at −0.632. On the academic side, arithmetic and spelling had the highest loadings at −0.602 and −0.591 respectively, with reading also contributing at −0.531. These results indicate that students with higher levels of motivation and greater emotional and social stability tend to perform better in core academic skills, particularly arithmetic and spelling.
+
+    The second canonical function was defined primarily by harmony and stability on the adjustment side, with loadings of −0.583 and −0.522 respectively. Motivation did not contribute meaningfully to this function (−0.010), and all academic achievement variables showed very weak loadings, with reading at −0.046, arithmetic at 0.007, and spelling at −0.018. This suggests that the second function does not reflect a meaningful relationship between the two domains and may instead capture variability in social-emotional traits that are unrelated to academic performance in this sample.
+
+    The third canonical function was characterized by a moderate loading from stability at 0.573, with minimal input from motivation (−0.078) and harmony (−0.335). The academic achievement variables again showed negligible loadings, with reading at 0.0005, arithmetic at 0.0055, and spelling at −0.0052. This suggests that the third function does not represent a substantive relationship between adjustment and achievement. Overall, only the first canonical function demonstrates a meaningful association, highlighting the importance of motivation and self-regulation in supporting academic success.
+
+<!-- -->
+
+-   Discuss how the canonical dimensions align with the theoretical constructs of adjustment and achievement.
+
+-   The canonical dimensions identified in the analysis align closely with the theoretical constructs of adjustment and achievement. The first canonical function captured a meaningful relationship between students’ behavioral and emotional traits and their academic performance. Specifically, the adjustment variables such as motivation, harmony, and stability were strongly associated with achievement outcomes in reading, arithmetic, and spelling. Motivation emerged as the most influential adjustment variable, also consistent with the theoretical understanding of adjustment as involving academic engagement and initiative. Similarly, arithmetic and spelling were the most prominent contributors on the achievement side, which aligns with the conceptualization of achievement as performance on standardized academic tasks. The second and third canonical functions did not reveal meaningful associations between the two constructs, as the achievement variables contributed minimally despite moderate input from adjustment indicators. These findings support the view that adjustment, particularly in terms of motivation and self-regulation, is closely tied to academic achievement and reinforce the theoretical linkage between emotional-behavioral functioning and school performance, concluding that students who demonstrate stronger well-being tend to achieve higher academic achievement.
+
+# Part4. Manuscript
+
+## 9: Find two scientific papers on topics that interest you which use at least one of the techniques we discussed in class (e.g., PCA, clustering, MDS, CCA, etc.). Summarize the methods and results sections of each paper.
+
+### **1. Principal Components and Independent Component Analysis of Solar and Space Data by R.E. Ugwoke, A.A. Ubachukwu, J.O. Urama, O. Okike, J.A. Alhassan, and A.E. Chukwude**
+
+Summary of Methods:
+
+-   The authors used real-time cosmic ray data, which was sourced from an online database of space weather observations. To prepare the data for analysis, they utilized the awk programming language to reformat the raw records into a structure compatible with R. Once imported into R, they applied Principal Component Analysis (PCA) to identify underlying patterns and dominant modes of variation in the multivariate dataset. Given the high dimensionality and complexity of cosmic ray measurements, PCA served as a powerful technique to reduce dimensionality and extract key components for interpretation.
+
+Summary of Results:
+
+-   The study used Principal Component Analysis (PCA) and Independent Component Analysis (ICA) to analyze long-term data on cosmic rays collected from various neutron monitor (NM) stations around the world. These monitors record increases or decreases in cosmic ray intensity, which can be influenced by solar activity.
+
+    Using PCA, the researchers identified dominant patterns in the data and discovered that these patterns could clearly separate two different types of solar-related cosmic ray events: Forbush decreases (FDs) and Ground Level Enhancements (GLEs). FDs are temporary drops in cosmic ray intensity caused by solar wind disturbances, while GLEs are sudden increases due to solar particle events. The PCA results showed that the monitors that detected FDs grouped differently from those that detected GLEs, meaning the analysis could successfully distinguish between these two phenomena based on their data patterns alone.
+
+    ICA further helped to separate overlapping signals, uncovering hidden structures in the data that may correspond to specific space weather events.
+
+    Overall, the study demonstrated that PCA and ICA are effective tools for identifying and distinguishing different types of cosmic ray activity. This contributes to our ability to better understand and monitor space weather by showing how global cosmic ray observations can be decomposed into meaningful and interpretable components.
+
+-   Were the methods and findings clear to you?
+
+-   The methods and findings seemed pretty clear to me, I just did not really understand the parts that mentioned Independent Component Analysis (ICA), perhaps because we did not go into it further.
+
+-   If not, list specific questions or parts that were confusing.
+
+-   What are the differences between PCA and ICA? and how does ICA actually work?
+
+### 2. Clustering Cancer Gene Expression Data: A Comparative Study by Marcilio CP de Souto, Ivan G Costa, Daniel SA de Araujo, Teresa B Ludermir, and Alexander Schliep
+
+Summary of Methods:
+
+-   In this study, the reseracher/authors analyzed 35 publicly available cancer gene expression datasets to compare how well different clustering methods could group samples according to their true cancer types. These datasets came from two common microarray platforms, Affymetrix and cDNA, which measure the activity of thousands of genes across different tissue samples. The authors tested seven clustering algorithms, including classic methods like hierarchical clustering and k-means, as well as more advanced approaches like mixture models and spectral clustering. They also experimented with four different ways of measuring similarity between samples (such as Pearson correlation and Euclidean distance) and used various data transformations to standardize the gene expression values. To judge how well each method performed, they compared the clusters produced by the algorithms to the known cancer types using a statistical measure called the corrected Rand index.
+
+Summary of Results:
+
+-   The study found that the mixture of Gaussians and k-means clustering consistently performed the best at correctly grouping the cancer samples according to their real types. These two methods recovered the actual structure of the datasets more accurately than others, especially compared to hierarchical clustering, which is still widely used in the medical field despite its poorer performance in this analysis. The researchers also found that the type of distance metric and data transformation used could affect the performance of the clustering, particularly for methods like spectral clustering, which was very sensitive to how similarities were measured. Overall, this work not only highlights which clustering methods are more reliable for cancer gene expression data but also provides a set of benchmark datasets for future researchers to use when developing or testing new clustering algorithms.
+
+-   Were the methods and findings clear to you?
+
+-   The methods and findings seemed mostly pretty clear, however I was more interested in the application of the Mixture of Multivariate Gaussians or Finite Mixture of Guassians (FMG) method,or also commonly known Guassian Mixture Model (GMM), which was utilized and deemed the best method in the study.
+
+-   If not, list specific questions or parts that were confusing.
+
+-   How can we apply FMG/GMM in other contexts? How do we utilize FMG/GMM in R?
+
+### Extra credit: If data from either paper is publicly available, attempt to replicate the analysis using R
